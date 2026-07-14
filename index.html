@@ -92,8 +92,11 @@
   td.total,td.paidt{position:sticky;background:#fff;text-align:center;font-weight:600;color:var(--sub);min-width:48px;z-index:1;}
   td.total{right:48px;} td.paidt{right:0;}
   thead th.total{right:48px;position:sticky;z-index:4;} thead th.paidt{right:0;position:sticky;z-index:4;}
-  tfoot td{position:sticky;bottom:0;background:var(--panel);font-weight:600;color:var(--sub);text-align:center;padding:6px 4px;z-index:2;}
+  tfoot td{background:var(--panel);font-weight:600;color:var(--sub);text-align:center;padding:6px 4px;}
+  tfoot tr.breakdown td{font-weight:500;font-size:11.5px;padding:4px;}
+  tfoot tr:last-child td{position:sticky;bottom:0;z-index:2;}
   tfoot td.namecol,tfoot td.rolecol{z-index:3;}
+  tfoot td.warnday{background:var(--sun);color:var(--sun-ink);font-weight:700;}
 
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:24px 0 8px;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;}
@@ -139,7 +142,7 @@
   <div class="notice no-print" id="notice">
     <span class="ic">💡</span>
     <span><b>使い続けるコツ：</b>このページを<b>ブックマーク（お気に入り）に追加</b>しておくと、いつでも同じ表を開けます。スマホは共有メニューから「ホーム画面に追加」でも便利。<br>
-    データはお使いの<b>ブラウザの中に保存</b>されます。<b>履歴・サイトデータを消すと入力も消えます</b>。別の端末やブラウザとは共有されません。</span>
+    データはお使いの<b>ブラウザの中に保存</b>されます。<b>履歴・サイトデータを消すと入力も消えます</b>。別の端末やブラウザとは共有されません。ときどき<b>「バックアップ」ボタンでファイルに控え</b>を残しておくと安心です（「復元」でいつでも戻せます）。</span>
     <button class="x" id="noticeX" title="閉じる">✕</button>
   </div>
 
@@ -173,6 +176,12 @@
       </div>
       <button class="btn ghost" id="printBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4h12v5"/><path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="6" rx="1"/></svg><span>印刷 / PDF</span></button>
       <button class="btn ghost" id="exportBtn">CSV書き出し</button>
+      <div class="field">
+        <label>1日の必要人数(0=判定なし)</label>
+        <input type="number" id="reqCount" min="0" style="width:88px" title="出勤人数がこの数を下回る日を赤く表示します">
+      </div>
+      <button class="btn ghost" id="backupBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg><span>バックアップ</span></button>
+      <label class="btn ghost" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 21h16"/></svg><span>復元</span><input type="file" id="restoreFile" accept="application/json,.json" style="display:none"></label>
     </div>
 
     <div class="editbar no-print" id="editbar">
@@ -191,8 +200,9 @@
       <div class="field"><label>部署</label><input type="text" id="empDept" placeholder="例）配送" list="deptList"><datalist id="deptList"></datalist></div>
       <div class="field"><label>役職</label><input type="text" id="empRole" placeholder="例）ドライバー"></div>
       <button class="btn primary" id="empAdd">従業員を追加</button>
+      <label class="btn" style="cursor:pointer">CSVから取り込む<input type="file" id="empCsv" accept=".csv,text/csv" style="display:none"></label>
     </div>
-    <p class="muted" style="margin:0 0 12px">曜日パターンを設定しておくと、シフト表に自動で入ります（月〜日それぞれのデフォルト勤務）。表示は上の「マスの表示」設定と同じ（記号／時間）で切り替わります。表側でマスをクリックすればいつでも上書きできます。</p>
+    <p class="muted" style="margin:0 0 12px">曜日パターンを設定しておくと、シフト表に自動で入ります（月〜日それぞれのデフォルト勤務）。表示は上の「マスの表示」設定と同じ（記号／時間）で切り替わります。表側でマスをクリックすればいつでも上書きできます。CSV取り込みは「名前,部署,役職」の順で読み込みます（1行目が見出しの場合は自動で飛ばします）。</p>
     <div style="overflow:auto"><table class="mtable" id="empTable"></table></div>
   </section>
 
@@ -275,11 +285,12 @@
       {id:uid(),name:"中村 彩",dept:"事務",role:"スタッフ",weekly:wd("d")},
       {id:uid(),name:"小林 翔",dept:"事務",role:"パート",weekly:{1:"e",3:"e",5:"e"}}
     ];
-    return {settings:{startDay:1,anchor:{y:now.getFullYear(),m:now.getMonth()+1},dispMode:"char",sel:"e"},
+    return {settings:{startDay:1,anchor:{y:now.getFullYear(),m:now.getMonth()+1},dispMode:"char",sel:"e",required:0},
       types:types,employees:emps,holidays:{},jholidays:{},cells:{}};
   }
   var state=load()||defaultState();
   if(!state.jholidays)state.jholidays={};
+  if(state.settings.required==null)state.settings.required=0;
   var editMode=false; // 起動時は閲覧（誤操作防止）
 
   function save(){try{localStorage.setItem(STORE,JSON.stringify(state));}catch(e){}}
@@ -382,11 +393,26 @@
       });
     });
 
-    h+='</tbody><tfoot><tr><td class="namecol">出勤人数</td><td class="rolecol"></td>';
+    h+='</tbody><tfoot>';
+    // 種別ごとの内訳行(勤務種別のみ)
+    var workTypes=state.types.filter(function(t){return t.kind==="work";});
+    workTypes.forEach(function(t){
+      h+='<tr class="breakdown"><td class="namecol" style="color:'+t.fg+'">'+esc(t.symbol)+' '+esc(t.label)+'</td><td class="rolecol"></td>';
+      ds.forEach(function(d){
+        var isoStr=iso(d),cnt=0;
+        state.employees.forEach(function(emp){if(resolve(emp.id,isoStr,d.getDay())===t.id)cnt++;});
+        h+='<td'+(cnt?(' style="color:'+t.fg+'"'):'')+'>'+(cnt||"")+'</td>';
+      });
+      h+='<td class="total"></td><td class="paidt"></td></tr>';
+    });
+    // 合計行(必要人数を下回る日は警告色)
+    var req=state.settings.required||0;
+    h+='<tr><td class="namecol">出勤人数'+(req>0?('<br><span style="font-weight:500;font-size:11px">必要 '+req+'人</span>'):'')+'</td><td class="rolecol"></td>';
     ds.forEach(function(d){
       var isoStr=iso(d),cnt=0;
       state.employees.forEach(function(emp){var id=resolve(emp.id,isoStr,d.getDay());var t=id?typeById(id):null;if(t&&t.kind==="work")cnt++;});
-      h+='<td>'+cnt+'</td>';
+      var warn=req>0&&cnt<req&&!state.holidays[isoStr];
+      h+='<td'+(warn?' class="warnday" title="必要人数('+req+'人)に足りません"':'')+'>'+cnt+'</td>';
     });
     h+='<td class="total"></td><td class="paidt"></td></tr></tfoot>';
     document.getElementById("grid").innerHTML=h;
@@ -540,6 +566,57 @@
     b.addEventListener("click",function(){document.querySelectorAll("#dispSeg button").forEach(function(x){x.classList.remove("on");});b.classList.add("on");state.settings.dispMode=b.dataset.mode;save();renderGrid();renderPalette();});
   });
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
+
+  /* ---------------- required count / backup / restore ---------------- */
+  document.getElementById("reqCount").value=state.settings.required||0;
+  document.getElementById("reqCount").addEventListener("change",function(e){
+    var v=parseInt(e.target.value,10);if(isNaN(v)||v<0)v=0;
+    state.settings.required=v;e.target.value=v;save();renderGrid();
+  });
+  document.getElementById("backupBtn").addEventListener("click",function(){
+    var d=new Date();
+    var payload={app:"chachamaru_shift",version:3,exported:iso(d),state:state};
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,1)],{type:"application/json"}));
+    a.download="シフト表バックアップ_"+iso(d)+".json";a.click();
+  });
+  document.getElementById("restoreFile").addEventListener("change",function(e){
+    var f=e.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var j=JSON.parse(String(rd.result));
+        var s=(j&&j.app==="chachamaru_shift"&&j.state)?j.state:j;
+        if(!s||!s.employees||!s.types||!s.settings){alert("バックアップファイルの形式が違うようです。");return;}
+        if(!confirm("バックアップから復元します。今の内容は上書きされます。よろしいですか？"))return;
+        state=s;
+        if(!state.jholidays)state.jholidays={};
+        if(state.settings.required==null)state.settings.required=0;
+        save();location.reload();
+      }catch(err){alert("読み込みに失敗しました。バックアップのJSONファイルを選んでください。");}
+    };
+    rd.readAsText(f,"utf-8");e.target.value="";
+  });
+
+  /* ---------------- employee CSV import ---------------- */
+  document.getElementById("empCsv").addEventListener("change",function(e){
+    var f=e.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var lines=String(rd.result).replace(/\r/g,"").split("\n").filter(function(l){return l.trim();});
+      var added=0;
+      lines.forEach(function(ln,i){
+        var c=ln.split(",").map(function(x){return x.replace(/^"|"$/g,"").trim();});
+        if(i===0&&(c[0].indexOf("名前")>=0||c[0].toLowerCase()==="name"))return; // 見出し行
+        if(!c[0])return;
+        state.employees.push({id:uid(),name:c[0],dept:c[1]||"(未設定)",role:c[2]||"",weekly:{}});
+        added++;
+      });
+      save();renderEmployees();refreshDeptList();
+      alert(added+"人を取り込みました。曜日パターンは表で設定してください。");
+    };
+    rd.readAsText(f,"utf-8");e.target.value="";
+  });
   document.getElementById("exportBtn").addEventListener("click",function(){
     var ds=days(),rows=[];
     rows.push(["部署","従業員","役職"].concat(ds.map(function(d){return (d.getMonth()+1)+"/"+d.getDate()+"("+WD[d.getDay()]+")";})).concat(["出勤","有給"]));
